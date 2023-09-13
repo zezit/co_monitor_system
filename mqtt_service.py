@@ -19,22 +19,21 @@ class MQTTService:
 
     """ 
     {
-        "threshold": 100,
         "send_all_readings": false,
         "sending_timeout_seconds": 10
-        "send_only_threshold": false
     }
     """
 
     def config_send_time(self, time, actual_values):
-        threshold, send_all_readings, _, send_only_threshold = actual_values
+        _, send_all_readings, _ = actual_values
+        print("send_all_readings: ", send_all_readings)
 
         json_packet = {
-            "threshold": threshold,
             "send_all_readings": send_all_readings,
             "sending_timeout_seconds": time,
-            "send_only_threshold": send_only_threshold
         }
+
+        print("json_packet: ", json_packet)
 
         self.client.publish("sensor/config", str(json_packet))
 
@@ -51,21 +50,22 @@ class MQTTService:
         self.client.publish("sensor/config", str(json_packet))
 
     def config_send_all_readings(self, actual_values):
-        threshold, _, sending_timeout_seconds, _ = actual_values
+        _, _, sending_timeout_seconds= actual_values
         json_packet = {
-            "threshold": threshold,
             "send_all_readings": True,
             "sending_timeout_seconds": sending_timeout_seconds,
-            "send_only_threshold": False
         }
         self.client.publish("sensor/config", str(json_packet))
 
-    def config_send_only_threshold(self, actual_values):
-        threshold, send_all_readings, _, _ = actual_values
+    def config_send_only_threshold(self):
         json_packet = {
-            "threshold": threshold,
             "send_all_readings": False,
             "sending_timeout_seconds": 0,
-            "send_only_threshold": True
+        }
+        self.client.publish("sensor/config", str(json_packet))
+
+    def config_name(self, name):
+        json_packet = {
+            "name": name
         }
         self.client.publish("sensor/config", str(json_packet))

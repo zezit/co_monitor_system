@@ -3,26 +3,17 @@ import time
 
 class ConfigManager:
     def __init__(self):
-        self.threshold = 8 # 8%
-        self.send_all_readings = False  # Funciona juntamente com o timeout
-        self.sending_timeout_seconds = 15
-        self.send_only_threshold = True  # Soprepoe o send_all_readings e o timeout
+        self.send_all_readings = True  # Funciona juntamente com o timeout
+        self.sending_timeout_seconds = 60
         self.serie_number = "8UPBcvyG"
+        self.telefone = None
+        self.wpp_api = None
         self.chat_id = None
         self.name = "Sensor de CO"
 
-    def set_threshold(self, value):
-        self.threshold = value
+    def set_send_all_readings(self):
+        self.send_all_readings = True
         return self.get_config()
-
-    def set_send_all_readings(self, value):
-        if (value):
-            self.send_only_threshold = False
-        self.send_all_readings = value
-        return self.get_config()
-
-    def get_threshold(self):
-        return self.threshold
 
     def set_sending_timeout_seconds(self, value):
         self.sending_timeout_seconds = value
@@ -32,7 +23,6 @@ class ConfigManager:
         if (value):
             self.send_all_readings = False
             self.sending_timeout_seconds = 0
-        self.send_only_threshold = value
 
         return self.get_config()
 
@@ -49,10 +39,7 @@ class ConfigManager:
         return self.sending_timeout_seconds
 
     def get_send_only_threshold(self):
-        return self.send_only_threshold
-
-    def check_treshhold(self, value):
-        return value > self.threshold
+        return not self.send_all_readings
 
     def get_config(self):
-        return self.threshold, self.send_all_readings, self.sending_timeout_seconds, self.send_only_threshold
+        return "", self.send_all_readings, self.sending_timeout_seconds

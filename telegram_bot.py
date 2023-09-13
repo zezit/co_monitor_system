@@ -1,34 +1,33 @@
 import requests
 import telebot
+from telebot import types  # Import the 'types' module for reply keyboard markup
 
 initial_message = """
 Bem vindo ao Configurador do Sensor de Monóxido de Carbono!
 
 Opções de comandos:
-/iniciar - Inicia o bot e mostra as opções de comandos
-/configurar - Configura modo de operação, tempo de envio e valor limite
-/ler - Lê o valor atual do sensor
-/ler_configuracoes - Lê as configurações atuais
-/registrar_produto - Registra o produto no servidor
+Configurar - Configura modo de operação, tempo de envio e valor limite
+Ler - Lê o valor atual do sensor
+Ler Configurações - Lê as configurações atuais
+Registrar Produto - Registra o produto no servidor
 """
 
 configure_instructions = """
 Menu de configuração:
 
 Opções de comandos:
-* configurar-limite - Configura o valor limite de CO (valor inteiro em porcentagem)
-    Ex.: "/configurar_limite 100"
+* Configurar Tempo - Configura o tempo de envio (valor inteiro em segundos)
+    Ex.: "Configurar Tempo 10"
     
-* configurar-tempo - Configura o tempo de envio (valor inteiro em segundos)
-    Ex.: "/configurar_tempo 10"
-    
-* configurar-modo - Configura o modo de operação (valor inteiro)
+* Configurar Modo - Configura o modo de operação (valor inteiro)
  - 0 (Envia apenas quando o valor limite é ultrapassado)
  - 1 (Envia todas as leituras no tempo configurado)
-    Ex.: "/configurar_modo 0"
+    Ex.: "Configurar Modo 0"
     
-* configurar_nome - Configura o nome do produto (string)
-    Ex.: "/configurar_nome "Sensor de CO""
+* Configurar Whatsapp - Configura o bot do whatsapp (string)
+    
+* Voltar ao Menu Principal - Volta ao menu principal
+    Ex.: "Voltar ao Menu Principal"
 """
 
 registration_instructions = """
@@ -37,6 +36,25 @@ registration_instructions = """
 Envie a seguinte mensagem:
 /registrar_produto
 """
+
+# Create a custom keyboard with menu options
+menu_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+menu_configure_button = types.KeyboardButton("Configurar")
+menu_keyboard.add(menu_configure_button)
+menu_keyboard.row('Ler configurações')
+menu_keyboard.row('Registrar Produto', 'Ler Sensor')
+
+# Create a custom keyboard for the configuration menu
+config_menu_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+config_menu_keyboard.row('Configurar Modo', 'Configurar Whatsapp')
+config_menu_keyboard.row('Configurar Tempo')
+config_menu_keyboard.row('Voltar ao Menu Principal')
+
+# Modos opçoes
+modo_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+modo_keyboard.row('Apenas quando ultrapassar o limite')
+modo_keyboard.row('Todas as leituras')
+
 # Initialize the bot
 
 
@@ -44,113 +62,227 @@ def botInit(token, config_manager, mqtt_service):
     global bot
     bot = telebot.TeleBot(str(token))
 
+    global configuration_service
+    configuration_service = config_manager
+
+    global sender_service
+    sender_service = mqtt_service
+
     # Define a message handler function
-    @bot.message_handler(commands=['iniciar'])
+    @bot.message_handler(commands=['/start'])
     def send_welcome(message):
-        bot.reply_to(message, initial_message)
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
 
-    @bot.message_handler(commands=['configurar'])
-    def send_config(message):
-        bot.reply_to(message, configure_instructions)
+    @bot.message_handler(func=lambda message: message.text == "Configurar")
+    def send_configure_command(message):
+        bot.reply_to(message, configure_instructions,
+                     reply_markup=config_menu_keyboard)
 
-    @bot.message_handler(commands=['configurar_limite'])
-    def set_threshold(message):
-        try:
-            value = int(message.text.split()[1])
-            print("Value: ", value)
-            config = config_manager.set_threshold(value)
-            print("Config: ", config)
-            mqtt_service.config_threshold(value, config)
-            print("Enviou")
-            bot.reply_to(
-                message, "Valor limite configurado para " + str(value))
-        except:
-            bot.reply_to(message, "Erro ao configurar valor limite")
+    @bot.message_handler(func=lambda message: message.text == "Voltar ao Menu Principal")
+    def send_main_menu(message):
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
 
-    @bot.message_handler(commands=['configurar_tempo'])
+    @bot.message_handler(func=lambda message: message.text == "Configurar Tempo")
     def set_timeout(message):
         try:
-            value = int(message.text.split()[1])
-            config = config_manager.set_sending_timeout_seconds(value)
-            mqtt_service.config_send_time(value, config)
-
-            bot.reply_to(
-                message, "Tempo de envio configurado para " + str(value) + " segundos")
+            msg = bot.reply_to(
+                message, "Digite o intervalo de envio em segundos:")
+            bot.register_next_step_handler(msg, set_interval_send_time_value)
         except:
             bot.reply_to(message, "Erro ao configurar tempo de envio")
 
-    @bot.message_handler(commands=['configurar_modo'])
+    @bot.message_handler(func=lambda message: message.text == "Configurar Modo")
     def set_mode(message):
         try:
-            value = int(message.text.split()[1])
-            if (value == 0):
-                config = config_manager.set_send_only_threshold(True)
-                mqtt_service.config_send_only_threshold(config)
-
-                bot.reply_to(
-                    message, "Modo de envio configurado para enviar apenas quando o valor limite é ultrapassado")
-            elif (value == 1):
-                config = config_manager.set_send_all_readings(True)
-                mqtt_service.config_send_all_readings(config)
-
-                bot.reply_to(
-                    message, "Modo de envio configurado para enviar todas as leituras")
-            else:
-                bot.reply_to(message, "Modo de envio inválido")
+            bot.reply_to(message, "Selecione o modo",
+                         reply_markup=modo_keyboard)
         except:
             bot.reply_to(message, "Erro ao configurar modo de envio")
 
-    @bot.message_handler(commands=['ler_configuracoes'])
+    @bot.message_handler(func=lambda message: message.text == "Apenas quando ultrapassar o limite")
+    def set_mode_threshold(message):
+        try:
+            config_manager.set_send_only_threshold(True)
+            mqtt_service.config_send_only_threshold()
+            bot.reply_to(
+                message, "Modo de envio configurado para enviar apenas quando o valor limite é ultrapassado")
+        except:
+            bot.reply_to(message, "Erro ao configurar modo de envio")
+
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
+
+    @bot.message_handler(func=lambda message: message.text == "Todas as leituras")
+    def set_mode_all(message):
+        try:
+            config_manager.set_send_all_readings()
+            mqtt_service.config_send_all_readings(config_manager.get_config())
+            msg = bot.reply_to(
+                message, "Digite o intervalo de envio em segundos:")
+            bot.register_next_step_handler(msg, set_interval_send_time_value)
+        except:
+            bot.reply_to(message, "Erro ao configurar modo de envio")
+
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
+
+    @bot.message_handler(func=lambda message: message.text == "Ler configurações")
     def read_config(message):
         try:
-            threshold, send_all_readings, sending_timeout_seconds, send_only_threshold = config_manager.get_config()
-            bot.reply_to(message, "Valor limite: " + str(threshold) +
-                         "\nTempo de envio: " + str(sending_timeout_seconds) + " segundos" +
-                         "\nModo de envio: " + ("Apenas quando ultrapassar o limite" if send_only_threshold else "Todas as leituras"))
+            _, send_all_readings, sending_timeout_seconds = config_manager.get_config()
+            reply = "Configurações atuais:\n"
+            reply += f"Tempo de envio: {sending_timeout_seconds} segundos\n"
+            reply += f"Modo de envio: {'Apenas quando ultrapassar o limite' if not send_all_readings else 'Todas as leituras'}\n"
+            if (config_manager.telefone is not None):
+                reply += f"API whatsapp: {config_manager.wpp_api}\n"
+            if (config_manager.wpp_api is not None):
+                reply += f"Número whatsapp: ({config_manager.telefone})\n"
+            bot.reply_to(message, reply)
         except:
             bot.reply_to(message, "Erro ao ler configurações")
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
 
-    @bot.message_handler(commands=['registrar_produto'])
+    @bot.message_handler(func=lambda message: message.text == "Registrar Produto")
     def register_product(message):
         try:
-            if(config_manager.chat_id is None):
+            if (config_manager.chat_id is None):
                 config_manager.chat_id = message.chat.id
                 bot.reply_to(message, "Produto registrado com sucesso")
             else:
-                bot.reply_to(message, "Produto já registrado")
+                config_manager.chat_id = None
+                bot.reply_to(message, "Produto desregistrado com sucesso")
+
         except:
             bot.reply_to(message, "Erro ao registrar produto")
-            
-    @bot.message_handler(commands=['ler'])
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
+
+    @bot.message_handler(func=lambda message: message.text == "Ler Sensor")
     def read_sensor(message):
         try:
             bot.reply_to(message, "Ainda não implementado...")
         except:
             bot.reply_to(message, "Erro ao comunicar com o sensor")
-            
-    @bot.message_handler(commands=['configurar_nome'])
-    def set_name(message):
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
+
+    @bot.message_handler(func=lambda message: message.text == "Configurar Whatsapp")
+    def set_whatsapp(message):
         try:
-            name = message.text.split()[1]
-            config_manager.name = name
-            bot.reply_to(message, "Nome configurado para " + name)
+            msg = bot.reply_to(
+                message, """Primeiro é necessário permitir o envio de mensagens do bot
+Clique no link abaixo e envie a mensagem 'I allow callmebot to send me messages'
+
+https://w.app/cGDgRZ
+""")
+            bot.register_next_step_handler(msg, set_whatsapp_api)
         except:
-            bot.reply_to(message, "Erro ao configurar nome")
+            bot.reply_to(message, "Erro ao configurar whatsapp")
 
     print("Telegram bot initialized")
     # Start polling
     bot.polling()
 
 
-def send_reading(message, config_manager,telefonenumber, apikey):
-    if(config_manager.chat_id is None):
+def send_reading(message, config_manager, telefonenumber, apikey):
+    if (config_manager.chat_id is None):
         print("Chat id not set")
         print(registration_instructions)
         return
     try:
-        bot.send_message(config_manager.chat_id, message)
-        messagem = f"https://api.callmebot.com/whatsapp.php?phone={telefonenumber}&text={message}&apikey={apikey}"
-        x = requests.post(messagem, json = {})
+        if not config_manager.chat_id is None:
+            bot.send_message(config_manager.chat_id, message)
+
+        if (telefonenumber is not None and apikey is not None):
+            messagem = f"https://api.callmebot.com/whatsapp.php?phone={telefonenumber}&text={message}&apikey={apikey}"
+            x = requests.post(messagem, json={})
 
     except Exception as e:
-            print("Erro ao enviar mensagem", e)
+        print("Erro ao enviar mensagem", e)
+
+
+# Function to set the interval send time value
+
+
+def set_interval_send_time_value(message):
+    try:
+        value = int(message.text)
+        print("Value: ", value)
+        if (value < 0):
+            value = 1
+        if (value > 255):
+            value = 255
+        config = configuration_service.set_sending_timeout_seconds(value)
+        print("Config: ", config)
+        sender_service.config_send_time(value, config)
+        print("Enviou")
+
+        bot.reply_to(
+            message, "Tempo de envio configurado para " + str(value) + " segundos")
+    except ValueError:
+        bot.reply_to(
+            message, "Valor inserido não é válido. Digite um valor inteiro em segundos.")
+
+    bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
+
+# Function to set the mode value
+
+
+def set_mode_value(message):
+    try:
+        value = int(message.text)
+        if (value == 0):
+            config = configuration_service.set_send_only_threshold(True)
+            sender_service.config_send_only_threshold(config)
+
+            bot.reply_to(
+                message, "Modo de envio configurado para enviar apenas quando o valor limite é ultrapassado")
+        elif (value == 1):
+            config = configuration_service.set_send_all_readings(True)
+            sender_service.config_send_all_readings(config)
+
+            bot.reply_to(
+                message, "Modo de envio configurado para enviar todas as leituras")
+
+            msg = bot.reply_to(
+                message, "Digite o intervalo de envio em segundos:")
+            bot.register_next_step_handler(msg, set_interval_send_time_value)
+        else:
+            bot.reply_to(message, "Modo de envio inválido")
+    except:
+        bot.reply_to(message, "Erro ao configurar modo de envio")
+
+    bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
+
+# Function to set the whatsapp api value
+
+
+def set_whatsapp_api(message):
+    try:
+        value = str(message.text)
+        print("Value: ", value)
+        configuration_service.wpp_api = value
+        bot.reply_to(
+            message, "Bot Whatsapp configurado!")
+        msg = bot.reply_to(
+            message, """Insira seu número de telefone no seguinte formato:
++5512345678901
+""")
+        bot.register_next_step_handler(msg, set_telefone)
+    except ValueError:
+        bot.reply_to(
+            message, "Valor inserido não é válido. Digite um valor válido.")
+
+    bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
+
+# Function to set the telefone value
+
+
+def set_telefone(message):
+    try:
+        value = str(message.text)
+        print("Value: ", value)
+        configuration_service.telefone = value
+        bot.reply_to(
+            message, "Telefone configurado!")
+    except ValueError:
+        bot.reply_to(
+            message, "Valor inserido não é válido. Digite um valor válido.")
+
+    bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
