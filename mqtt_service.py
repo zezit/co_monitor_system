@@ -50,7 +50,7 @@ class MQTTService:
         self.client.publish("sensor/config", str(json_packet))
 
     def config_send_all_readings(self, actual_values):
-        _, _, sending_timeout_seconds= actual_values
+        _, _, sending_timeout_seconds = actual_values
         json_packet = {
             "send_all_readings": True,
             "sending_timeout_seconds": sending_timeout_seconds,
@@ -68,4 +68,13 @@ class MQTTService:
         json_packet = {
             "name": name
         }
+        self.client.publish("sensor/config", str(json_packet))
+
+    def simulate(self, config):
+        _, _, sending_timeout_seconds = config
+        json_packet = {
+            "send_all_readings": "Alarm",
+            "sending_timeout_seconds": sending_timeout_seconds,
+        }
+        print("Sending: ", json_packet)
         self.client.publish("sensor/config", str(json_packet))

@@ -10,6 +10,7 @@ Configurar - Configura modo de operação, tempo de envio e valor limite
 Ler - Lê o valor atual do sensor
 Ler Configurações - Lê as configurações atuais
 Registrar Produto - Registra o produto no servidor
+Simular Alarme - Simula um alarme de CO
 """
 
 configure_instructions = """
@@ -18,14 +19,14 @@ Menu de configuração:
 Opções de comandos:
 * Configurar Tempo - Configura o tempo de envio (valor inteiro em segundos)
     Ex.: "Configurar Tempo 10"
-    
+
 * Configurar Modo - Configura o modo de operação (valor inteiro)
  - 0 (Envia apenas quando o valor limite é ultrapassado)
  - 1 (Envia todas as leituras no tempo configurado)
     Ex.: "Configurar Modo 0"
-    
+
 * Configurar Whatsapp - Configura o bot do whatsapp (string)
-    
+
 * Voltar ao Menu Principal - Volta ao menu principal
     Ex.: "Voltar ao Menu Principal"
 """
@@ -41,8 +42,9 @@ Envie a seguinte mensagem:
 menu_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
 menu_configure_button = types.KeyboardButton("Configurar")
 menu_keyboard.add(menu_configure_button)
-menu_keyboard.row('Ler configurações')
+menu_keyboard.row('Ler configurações', 'Hab/Des Whatsapp')
 menu_keyboard.row('Registrar Produto', 'Ler Sensor')
+menu_keyboard.row('Simular Alarme')
 
 # Create a custom keyboard for the configuration menu
 config_menu_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -58,7 +60,7 @@ modo_keyboard.row('Todas as leituras')
 # Initialize the bot
 
 
-def botInit(token, config_manager, mqtt_service):
+def botInit(token, config_manager, mqtt_service, db):
     global bot
     bot = telebot.TeleBot(str(token))
 
@@ -68,8 +70,11 @@ def botInit(token, config_manager, mqtt_service):
     global sender_service
     sender_service = mqtt_service
 
+    global db_repo
+    db_repo = db
+
     # Define a message handler function
-    @bot.message_handler(commands=['/start'])
+    @bot.message_handler(func=lambda message: message.text == "/start")
     def send_welcome(message):
         bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
 
@@ -77,6 +82,17 @@ def botInit(token, config_manager, mqtt_service):
     def send_configure_command(message):
         bot.reply_to(message, configure_instructions,
                      reply_markup=config_menu_keyboard)
+
+    @bot.message_handler(func=lambda message: message.text == "Simular Alarme")
+    def send_simulate_command(message):
+        try:
+            mqtt_service.simulate(config_manager.get_config())
+            bot.reply_to(message, "Simulando alarme...")
+            print("Simulando alarme...")
+        except:
+            bot.reply_to(message, "Erro ao simular alarme de CO")
+
+        bot.reply_to(message, initial_message, reply_markup=menu_keyboard)
 
     @bot.message_handler(func=lambda message: message.text == "Voltar ao Menu Principal")
     def send_main_menu(message):
@@ -146,9 +162,11 @@ def botInit(token, config_manager, mqtt_service):
             if (config_manager.chat_id is None):
                 config_manager.chat_id = message.chat.id
                 bot.reply_to(message, "Produto registrado com sucesso")
+                db_repo.update_chat_id(message.chat.id)
             else:
                 config_manager.chat_id = None
                 bot.reply_to(message, "Produto desregistrado com sucesso")
+                db_repo.update_chat_id(config_manager.chat_id)
 
         except:
             bot.reply_to(message, "Erro ao registrar produto")
@@ -170,8 +188,25 @@ def botInit(token, config_manager, mqtt_service):
 Clique no link abaixo e envie a mensagem 'I allow callmebot to send me messages'
 
 https://w.app/cGDgRZ
+
+Insira o Código recebido:
 """)
             bot.register_next_step_handler(msg, set_whatsapp_api)
+        except:
+            bot.reply_to(message, "Erro ao configurar whatsapp")
+
+    # 'Hab/Des Whatsapp'
+    @bot.message_handler(func=lambda message: message.text == "Hab/Des Whatsapp")
+    def set_whatsapp(message):
+        try:
+            if (config_manager.wpp_send):
+                config_manager.wpp_send = False
+                bot.reply_to(message, "Whatsapp desabilitado")
+            else:
+                config_manager.wpp_send = True
+                bot.reply_to(message, "Whatsapp habilitado")
+
+                db_repo.update_send(config_manager.wpp_send)
         except:
             bot.reply_to(message, "Erro ao configurar whatsapp")
 
@@ -186,11 +221,11 @@ def send_reading(message, config_manager, telefonenumber, apikey):
         print(registration_instructions)
         return
     try:
-        if not config_manager.chat_id is None:
+        if config_manager.chat_id is not None:
             bot.send_message(config_manager.chat_id, message)
 
-        if (telefonenumber is not None and apikey is not None):
-            messagem = f"https://api.callmebot.com/whatsapp.php?phone={telefonenumber}&text={message}&apikey={apikey}"
+        if (config_manager.telefone is not None and config_manager.wpp_api is not None):
+            messagem = f"https://api.callmebot.com/whatsapp.php?phone={config_manager.telefone}&text={message}&apikey={config_manager.wpp_api}"
             x = requests.post(messagem, json={})
 
     except Exception as e:
@@ -260,6 +295,9 @@ def set_whatsapp_api(message):
         configuration_service.wpp_api = value
         bot.reply_to(
             message, "Bot Whatsapp configurado!")
+
+        db_repo.update_api_key(value)
+
         msg = bot.reply_to(
             message, """Insira seu número de telefone no seguinte formato:
 +5512345678901
@@ -281,6 +319,7 @@ def set_telefone(message):
         configuration_service.telefone = value
         bot.reply_to(
             message, "Telefone configurado!")
+        db_repo.update_telefone(value)
     except ValueError:
         bot.reply_to(
             message, "Valor inserido não é válido. Digite um valor válido.")

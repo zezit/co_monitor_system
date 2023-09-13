@@ -2,14 +2,15 @@ import time
 
 
 class ConfigManager:
-    def __init__(self):
+    def __init__(self, saved_config):
+        [telefone, api, chat_id] = saved_config
         self.send_all_readings = True  # Funciona juntamente com o timeout
-        self.sending_timeout_seconds = 60
+        self.sending_timeout_seconds = 1
         self.serie_number = "8UPBcvyG"
-        self.telefone = None
-        self.wpp_api = None
-        self.chat_id = None
-        self.name = "Sensor de CO"
+        self.telefone = telefone
+        self.wpp_api = api
+        self.chat_id = chat_id
+        self.wpp_send = False
 
     def set_send_all_readings(self):
         self.send_all_readings = True

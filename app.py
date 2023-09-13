@@ -12,6 +12,8 @@ import os
 
 from mqtt_service import MQTTService
 
+from database import Repository
+
 load_dotenv()  # pega as variáveis de ambiente do arquivo .env
 
 # enviorment
@@ -72,6 +74,7 @@ def treat_sending():
 
 def on_message_callback(client, userdata, message):
     global co_level
+    print("READING")
 
     # Reading packet (sensor/pub):
     """
@@ -104,7 +107,7 @@ def on_message_callback(client, userdata, message):
         reading_co_level = json.loads(message.payload.decode())["co_level"]
 
         # Verifica se o valor do co_level é um número
-        if (not isinstance(reading_co_level, int)):
+        if (not isinstance(reading_co_level, float)):
             print("Invalid JSON")
             return
 
@@ -123,8 +126,13 @@ if __name__ == "__main__":
     co_level = -500
     packet_co_level = ""
 
+    db = Repository(str(os.getenv('SUPABASE_URL')),
+                    str(os.getenv('SUPABASE_KEY')))
+
+    saved_config = db.get_saved_cred()
+
     # Initialize configuration manager
-    config_manager = ConfigManager()
+    config_manager = ConfigManager(saved_config)
 
     # Initialize MQTT service
     mqtt_service = MQTTService(MQTT_BROKER_URI, on_message_callback)
@@ -135,8 +143,6 @@ if __name__ == "__main__":
 
     # Initialize Telegram bot
     telegram_bot.botInit(TELEGRAM_BOT_API_KEY,
-                         config_manager, mqtt_service)
-
-    print("Telegram bot initialized")
+                         config_manager, mqtt_service, db)
     main()
 # https://mqtthq.com/client
