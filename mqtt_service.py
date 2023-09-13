@@ -17,13 +17,6 @@ class MQTTService:
         self.client.subscribe(topic)
         self.client.on_message = callback
 
-    """ 
-    {
-        "send_all_readings": false,
-        "sending_timeout_seconds": 10
-    }
-    """
-
     def config_send_time(self, time, actual_values):
         _, send_all_readings, _ = actual_values
         print("send_all_readings: ", send_all_readings)
@@ -34,18 +27,6 @@ class MQTTService:
         }
 
         print("json_packet: ", json_packet)
-
-        self.client.publish("sensor/config", str(json_packet))
-
-    def config_threshold(self, threshold, actual_values):
-        _, send_all_readings, send_only_threshold, sending_timeout_seconds = actual_values
-
-        json_packet = {
-            "threshold": threshold,
-            "send_all_readings": send_all_readings,
-            "sending_timeout_seconds": sending_timeout_seconds,
-            "send_only_threshold": send_only_threshold
-        }
 
         self.client.publish("sensor/config", str(json_packet))
 
