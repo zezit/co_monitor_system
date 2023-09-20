@@ -215,7 +215,7 @@ def botInit(token, config_manager, mqtt_service, db):
                 message, """Primeiro é necessário permitir o envio de mensagens do bot
 Clique no link abaixo e envie a mensagem 'I allow callmebot to send me messages'
 
-https://w.app/cGDgRZ
+wa.link/onc7sy
 
 Insira o Código recebido:
 """)
