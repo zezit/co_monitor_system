@@ -15,6 +15,7 @@ load_dotenv()  # pega as variáveis de ambiente do arquivo .env
 
 # enviorment
 
+
 # mqtt configuration
 MQTT_BROKER_URI = str(os.getenv('MQTT_BROKER'))
 MQTT_PORT = int(os.getenv('MQTT_PORT'))
@@ -34,7 +35,7 @@ def treat_sending():
     print("")
     print(json.dumps(packet_co_level, indent=4, sort_keys=True))
     print("")
-    
+
     telegram_bot.send_reading(packet_co_level, config_manager)
 
 
@@ -91,7 +92,7 @@ if __name__ == "__main__":
     # Initialize MQTT service
     mqtt_service = MQTTService(MQTT_BROKER_URI, on_message_callback)
     print("MQTT service initialized")
-    
+
     # Initialize sub to ESP32
     mqtt_service.subscribe_to_topic(MQTT_SUBSCRIBE_TOPIC, on_message_callback)
     print("Subscribed to topic: ", MQTT_SUBSCRIBE_TOPIC)
@@ -99,4 +100,5 @@ if __name__ == "__main__":
     # Initialize Telegram bot
     telegram_bot.botInit(TELEGRAM_BOT_API_KEY,
                          config_manager, mqtt_service, db)
+
     main()

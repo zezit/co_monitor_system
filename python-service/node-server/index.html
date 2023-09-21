@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        background-color: #f0f0f0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+      }
+      .loading {
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading">
+      <img
+        src="https://cdn.pixabay.com/animation/2023/03/20/02/45/02-45-27-186_512.gif"
+        alt="Loading..."
+      />
+      <p id="status">Server is running!</p>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const socket = io();
+
+      socket.on("python-error", (data) => {
+        // Update the status text with Python error
+        document.getElementById("status").textContent = `Python Error: ${data}`;
+      });
+
+      socket.on("python-exit", (code) => {
+        // Update the status text with Python exit code
+        document.getElementById(
+          "status"
+        ).textContent = `Python process exited with code ${code}`;
+      });
+
+      socket.on("python-started", () => {
+        // Update the status text with Python exit code
+        document.getElementById(
+          "status"
+        ).textContent = `Server is running!`;
+      });
+    </script>
+  </body>
+</html>
